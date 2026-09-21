@@ -1,0 +1,199 @@
+package com.epay.reporting.repository.view;
+
+import com.epay.reporting.entity.view.RecentTransactionReport;
+import com.epay.reporting.entity.view.TransactionFailureSummaryReport;
+import com.epay.reporting.entity.view.TransactionPaymodeReport;
+import com.epay.reporting.entity.view.TransactionSummaryReport;
+import com.epay.reporting.model.request.RecentTransactionRequest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class TransactionDashboardRepositoryTest {
+
+    private static final String MID = "MID123";
+    private static final String FROM_DATE = "2025-01-01";
+    private static final String TO_DATE = "2025-01-31";
+
+    @InjectMocks
+    private TransactionDashboardRepository repository;
+
+    @Mock
+    private NamedParameterJdbcTemplate jdbcTemplate;
+
+    @Test
+    void testRecentTransactionSummaryDailyForAllCurrency() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        RecentTransactionRequest request = RecentTransactionRequest.builder()
+                .fromDate(FROM_DATE)
+                .toDate(TO_DATE)
+                .build();
+
+        when(jdbcTemplate.queryForObject(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                eq(Long.class)))
+                .thenReturn(2L);
+
+        when(jdbcTemplate.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(Collections.emptyList());
+
+        Page<RecentTransactionReport> response =
+                repository.getRecentTransactionSummaryDaily(
+                        MID, "ALL", request, pageable);
+
+        assertNotNull(response);
+        assertEquals(2L, response.getTotalElements());
+
+        ArgumentCaptor<String> queryCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(jdbcTemplate, times(2)).query(
+                queryCaptor.capture(),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class));
+
+        for (String query : queryCaptor.getAllValues()) {
+            assertFalse(
+                    query.contains("CURRENCY_CODE = :currencyCode"),
+                    "ALL currency should not add currency condition");
+        }
+    }
+
+    @Test
+    void testRecentTransactionSummaryMonthlyForAllCurrency() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        RecentTransactionRequest request = RecentTransactionRequest.builder()
+                .frequency("MONTHLY")
+                .fromDate(FROM_DATE)
+                .toDate(TO_DATE)
+                .build();
+
+        when(jdbcTemplate.queryForObject(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                eq(Long.class)))
+                .thenReturn(2L);
+
+        when(jdbcTemplate.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(Collections.emptyList());
+
+        Page<RecentTransactionReport> response =
+                repository.getRecentTransactionSummaryMonthly(
+                        MID, "ALL", request, pageable);
+
+        assertNotNull(response);
+        assertEquals(2L, response.getTotalElements());
+
+        verify(jdbcTemplate).queryForObject(
+                argThat(query ->
+                        !query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                eq(Long.class));
+
+        verify(jdbcTemplate).query(
+                argThat(query ->
+                        !query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class));
+    }
+
+    @Test
+    void testTransactionPayModeReportForAllCurrency() {
+
+        when(jdbcTemplate.query(
+                argThat(query ->
+                        !query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(List.of(new TransactionPaymodeReport()));
+
+        List<TransactionPaymodeReport> response =
+                repository.getTransactionPayModeReport(
+                        MID, "ALL", FROM_DATE, TO_DATE);
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+    }
+
+    @Test
+    void testTransactionSummaryReportForAllCurrency() {
+
+        when(jdbcTemplate.queryForObject(
+                argThat(query ->
+                        !query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(new TransactionSummaryReport());
+
+        Optional<TransactionSummaryReport> response =
+                repository.getTransactionSummaryReport(
+                        MID, "ALL", FROM_DATE, TO_DATE);
+
+        assertTrue(response.isPresent());
+    }
+
+    @Test
+    void testTransactionFailureSummaryReportForAllCurrency() {
+
+        when(jdbcTemplate.query(
+                argThat(query ->
+                        !query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(List.of(new TransactionFailureSummaryReport()));
+
+        List<TransactionFailureSummaryReport> response =
+                repository.getTransactionFailureSummaryReport(
+                        MID, "ALL", FROM_DATE, TO_DATE);
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+    }
+
+    @Test
+    void testCurrencyConditionAddedForSpecificCurrency() {
+
+        when(jdbcTemplate.query(
+                argThat(query ->
+                        query.contains("CURRENCY_CODE = :currencyCode")),
+                any(MapSqlParameterSource.class),
+                any(BeanPropertyRowMapper.class)))
+                .thenReturn(List.of(new TransactionPaymodeReport()));
+
+        List<TransactionPaymodeReport> response =
+                repository.getTransactionPayModeReport(
+                        MID, "INR", FROM_DATE, TO_DATE);
+
+        assertNotNull(response);
+        assertEquals(1, response.size());
+    }
+}
