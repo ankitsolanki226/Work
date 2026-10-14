@@ -1,35 +1,36 @@
-@Test
-void testRecentTransactionSummaryDailyForAllCurrency() {
+private void validateSiteDetails(String siteDetails) {
+    if (StringUtils.isBlank(siteDetails)) {
+        return;
+    }
 
-    Pageable pageable = PageRequest.of(0, 10);
+    String[] urls = siteDetails.split(",", -1);
 
-    RecentTransactionRequest request = RecentTransactionRequest.builder()
-            .fromDate(FROM_DATE)
-            .toDate(TO_DATE)
-            .build();
+    for (String url : urls) {
+        if (!url.equals(url.trim())) {
+            errorDtoList.add(
+                ErrorDto.builder()
+                    .errorCode("8010")
+                    .errorMessage(
+                        VSCC_INFO + SITE_DETAILS
+                            + " contains leading or trailing spaces. "
+                            + "Please provide a valid value."
+                    )
+                    .build()
+            );
+            return;
+        }
 
-    when(jdbcTemplate.queryForObject(
-            anyString(),
-            any(MapSqlParameterSource.class),
-            eq(Long.class)))
-            .thenReturn(2L);
-
-    when(jdbcTemplate.query(
-            anyString(),
-            any(MapSqlParameterSource.class),
-            any(BeanPropertyRowMapper.class)))
-            .thenReturn(Collections.emptyList());
-
-    Page<RecentTransactionReport> response =
-            repository.getRecentTransactionSummaryDaily(
-                    MID, "ALL", request, pageable);
-
-    assertNotNull(response);
-    assertEquals(2L, response.getTotalElements());
-
-    verify(jdbcTemplate).query(
-            argThat(query ->
-                    !query.contains("CURRENCY_CODE = :currencyCode")),
-            any(MapSqlParameterSource.class),
-            any(BeanPropertyRowMapper.class));
+        if (url.isEmpty() || validate(url, WEBSITE_URL_REGEX)) {
+            errorDtoList.add(
+                ErrorDto.builder()
+                    .errorCode("8002")
+                    .errorMessage(
+                        VSCC_INFO + SITE_DETAILS
+                            + " is invalid. Reason : Format is incorrect"
+                    )
+                    .build()
+            );
+            return;
+        }
+    }
 }
